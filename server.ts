@@ -4,9 +4,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import { PrismaClient } from "@prisma/client";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { PrismaNeon } from "@prisma/adapter-neon";
-import ws from "ws";
 import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypto";
 import jwt from "jsonwebtoken";
 import { detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter.js";
@@ -15,12 +12,8 @@ let prisma: PrismaClient;
 
 function getPrisma() {
   if (!prisma) {
-    neonConfig.webSocketConstructor = ws;
-    const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) throw new Error("DATABASE_URL is missing!");
-    const pool = new Pool({ connectionString });
-    const adapter = new PrismaNeon(pool as any);
-    prisma = new PrismaClient({ adapter });
+    if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is missing!");
+    prisma = new PrismaClient();
   }
   return prisma;
 }
