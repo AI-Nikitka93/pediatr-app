@@ -9,7 +9,7 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import ws from "ws";
 import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypto";
 import jwt from "jsonwebtoken";
-import { detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter";
+import { detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter.js";
 
 neonConfig.webSocketConstructor = ws;
 const connectionString = process.env.DATABASE_URL!;
