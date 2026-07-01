@@ -1,0 +1,106 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  type          String    // "private" or "company"
+  email         String    @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  role          String    @default("user") // "partner_clinic", "corporate_customer"
+
+  // Private Client Fields
+  children      ChildProfile[]
+  
+  // Company Fields
+  inn           String?
+  address       String?
+  contactPerson String?
+  corporateChildren CorporateChild[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model ChildProfile {
+  id          String    @id @default(cuid())
+  name        String
+  gender      String    // "boy" or "girl"
+  birthdate   DateTime
+  
+  parentId    String
+  parent      User      @relation(fields: [parentId], references: [id])
+  
+  growthRecords   GrowthRecord[]
+  sicknessRecords SicknessRecord[]
+  appointments    Appointment[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CorporateChild {
+  id              String    @id @default(cuid())
+  name            String
+  gender          String
+  birthdate       DateTime
+  ageInMonths     Int
+  corporatePlan   String
+  lastCheckupDate DateTime?
+
+  clinicId        String
+  clinic          User      @relation(fields: [clinicId], references: [id])
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model GrowthRecord {
+  id          String    @id @default(cuid())
+  date        DateTime
+  ageInMonths Int
+  weight      Float
+  height      Float
+
+  childId     String
+  child       ChildProfile @relation(fields: [childId], references: [id])
+}
+
+model SicknessRecord {
+  id          String    @id @default(cuid())
+  date        DateTime
+  symptoms    String
+  doctorNotes String
+  status      String    // "Вылечен" | "Активно" | "Наблюдение"
+
+  childId     String
+  child       ChildProfile @relation(fields: [childId], references: [id])
+}
+
+model Appointment {
+  id          String    @id @default(cuid())
+  doctorName  String
+  doctorRole  String
+  date        DateTime
+  time        String
+  symptom     String
+  type        String    // "online" | "offline"
+  status      String    // "Ожидает" | "Завершен"
+
+  childId     String
+  child       ChildProfile @relation(fields: [childId], references: [id])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
