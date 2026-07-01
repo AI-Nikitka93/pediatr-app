@@ -3,11 +3,23 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
-import { detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter";
 import { PrismaClient } from "@prisma/client";
-import { randomBytes, createHash } from "crypto";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import ws from "ws";
+import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypto";
+import jwt from "jsonwebtoken";
+import { detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter";
 
-const prisma = new PrismaClient();
+neonConfig.webSocketConstructor = ws;
+const connectionString = process.env.DATABASE_URL!;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaNeon(pool);
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter });
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -37,8 +49,27 @@ function hashPassword(password: string) {
   return createHash("sha256").update(password + process.env.SALT).digest("hex");
 }
 
-function generateToken() {
-  return randomBytes(32).toString("hex");
+const ENCRYPTION_KEY = Buffer.from(process.env.SALT || "default-salt-1234567890123456789").subarray(0, 32).toString('padEnd', 32).substring(0, 32);
+
+function encryptData(text: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", Buffer.from(ENCRYPTION_KEY), iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  const authTag = cipher.getAuthTag().toString("hex");
+  return { iv: iv.toString("hex"), encrypted, authTag };
+}
+
+function decryptData(encData: { iv: string, encrypted: string, authTag: string }) {
+  const decipher = createDecipheriv("aes-256-gcm", Buffer.from(ENCRYPTION_KEY), Buffer.from(encData.iv, "hex"));
+  decipher.setAuthTag(Buffer.from(encData.authTag, "hex"));
+  let decrypted = decipher.update(encData.encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+function generateToken(userId: string) {
+  return jwt.sign({ userId }, process.env.JWT_SECRET || "secret", { expiresIn: "1d" });
 }
 
 export function createApp() {
@@ -63,14 +94,14 @@ export function createApp() {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
     const token = authHeader.substring(7);
-    const session = await prisma.session.findUnique({ where: { token } });
-    if (!session || session.expiresAt < new Date()) {
-      if (session) await prisma.session.delete({ where: { id: session.id } });
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret") as { userId: string };
+      (req as any).user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+      if (!(req as any).user) return res.status(401).json({ error: "User not found" });
+      next();
+    } catch (e) {
       return res.status(401).json({ error: "Session expired or invalid" });
     }
-    // Attach user
-    (req as any).user = await prisma.user.findUnique({ where: { id: session.userId } });
-    next();
   };
 
   // --- API Routes ---
@@ -93,14 +124,7 @@ export function createApp() {
       if (!user || user.passwordHash !== hashPassword(password)) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      const token = generateToken();
-      await prisma.session.create({
-        data: {
-          userId: user.id,
-          token,
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24) // 1 day
-        }
-      });
+      const token = generateToken(user.id);
       res.json({ token, user: { id: user.id, email: user.email, name: user.name, type: user.type } });
     } catch (e) { res.status(500).json({ error: "Login failed" }); }
   });
@@ -113,25 +137,31 @@ export function createApp() {
     const user = (req as any).user;
     const profile = await prisma.childProfile.findFirst({ where: { parentId: user.id } });
     if (!profile) return res.status(404).json({ error: "No profile found" });
-    res.json({ profile });
+    try {
+      const decryptedName = decryptData(JSON.parse(profile.name));
+      res.json({ profile: { ...profile, name: decryptedName } });
+    } catch {
+      res.json({ profile }); // Fallback for old unencrypted data
+    }
   });
 
   app.put("/api/child-profile", requireAuth, async (req, res) => {
     const user = (req as any).user;
     const { name, gender, birthdate } = req.body.profile;
+    const encryptedName = JSON.stringify(encryptData(name));
     const existing = await prisma.childProfile.findFirst({ where: { parentId: user.id } });
     let profile;
     if (existing) {
       profile = await prisma.childProfile.update({
         where: { id: existing.id },
-        data: { name, gender, birthdate: new Date(birthdate) }
+        data: { name: encryptedName, gender, birthdate: new Date(birthdate) }
       });
     } else {
       profile = await prisma.childProfile.create({
-        data: { name, gender, birthdate: new Date(birthdate), parentId: user.id }
+        data: { name: encryptedName, gender, birthdate: new Date(birthdate), parentId: user.id }
       });
     }
-    res.json({ profile });
+    res.json({ profile: { ...profile, name } });
   });
 
   app.post("/api/chat", async (req, res) => {
