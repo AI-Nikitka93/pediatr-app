@@ -129,6 +129,15 @@ export function createApp() {
     } catch (e) { res.status(500).json({ error: "Login failed" }); }
   });
 
+  app.get("/api/auth/debug-env", (req, res) => {
+    res.json({
+      hasDbUrl: !!process.env.DATABASE_URL,
+      dbUrlLength: process.env.DATABASE_URL?.length || 0,
+      hasDirectUrl: !!process.env.DIRECT_URL,
+      hasSalt: !!process.env.SALT
+    });
+  });
+
   app.post("/api/auth/demo-session", async (req, res) => {
     try {
       const { user } = req.body;
@@ -150,7 +159,10 @@ export function createApp() {
         auditId: "demo-audit-" + Date.now(),
         consent: true
       });
-    } catch (e) { res.status(500).json({ error: "Demo session failed" }); }
+    } catch (e) {
+      console.error("DEMO SESSION ERROR", e);
+      res.status(500).json({ error: "Demo session failed" });
+    }
   });
 
   app.get("/api/auth/me", requireAuth, (req, res) => {
