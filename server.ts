@@ -126,7 +126,9 @@ export function createApp() {
       }
       const token = generateToken(user.id);
       res.json({ token, user: { id: user.id, email: user.email, name: user.name, type: user.type } });
-    } catch (e) { res.status(500).json({ error: "Login failed" }); }
+    } catch (e: any) { 
+      res.status(500).json({ error: "Demo session failed", details: e?.message || String(e) }); 
+    }
   });
 
   app.get("/api/auth/debug-env", (req, res) => {
@@ -134,7 +136,9 @@ export function createApp() {
       hasDbUrl: !!process.env.DATABASE_URL,
       dbUrlLength: process.env.DATABASE_URL?.length || 0,
       hasDirectUrl: !!process.env.DIRECT_URL,
-      hasSalt: !!process.env.SALT
+      hasSalt: !!process.env.SALT,
+      moduleConnectionStringLength: connectionString?.length || 0,
+      moduleConnectionStringType: typeof connectionString
     });
   });
 
