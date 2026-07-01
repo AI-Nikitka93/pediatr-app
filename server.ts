@@ -11,14 +11,19 @@ import { randomBytes, createHash, createCipheriv, createDecipheriv } from "crypt
 import jwt from "jsonwebtoken";
 import { detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter.js";
 
-neonConfig.webSocketConstructor = ws;
-const connectionString = process.env.DATABASE_URL!;
-const pool = new Pool({ connectionString });
-const adapter = new PrismaNeon(pool as any);
+let prisma: PrismaClient;
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
-export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter });
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+function getPrisma() {
+  if (!prisma) {
+    neonConfig.webSocketConstructor = ws;
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) throw new Error("DATABASE_URL is missing!");
+    const pool = new Pool({ connectionString });
+    const adapter = new PrismaNeon(pool as any);
+    prisma = new PrismaClient({ adapter });
+  }
+  return prisma;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -96,7 +101,7 @@ export function createApp() {
     const token = authHeader.substring(7);
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret") as { userId: string };
-      (req as any).user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+      (req as any).user = await getPrisma().user.findUnique({ where: { id: decoded.userId } });
       if (!(req as any).user) return res.status(401).json({ error: "User not found" });
       next();
     } catch (e) {
@@ -108,9 +113,9 @@ export function createApp() {
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { email, password, name, type } = req.body;
-      const existing = await prisma.user.findUnique({ where: { email } });
+      const existing = await getPrisma().user.findUnique({ where: { email } });
       if (existing) return res.status(400).json({ error: "Email already exists" });
-      const user = await prisma.user.create({
+      const user = await getPrisma().user.create({
         data: { email, passwordHash: hashPassword(password), name, type: type || "private" }
       });
       res.status(201).json({ success: true, user: { id: user.id, email: user.email, name: user.name, type: user.type } });
@@ -120,7 +125,7 @@ export function createApp() {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
-      const user = await prisma.user.findUnique({ where: { email } });
+      const user = await getPrisma().user.findUnique({ where: { email } });
       if (!user || user.passwordHash !== hashPassword(password)) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
@@ -145,9 +150,9 @@ export function createApp() {
   app.post("/api/auth/demo-session", async (req, res) => {
     try {
       const { user } = req.body;
-      let dbUser = await prisma.user.findUnique({ where: { email: user.email } });
+      let dbUser = await getPrisma().user.findUnique({ where: { email: user.email } });
       if (!dbUser) {
-        dbUser = await prisma.user.create({
+        dbUser = await getPrisma().user.create({
           data: {
             email: user.email,
             passwordHash: hashPassword("12345"),
@@ -175,7 +180,7 @@ export function createApp() {
 
   app.get("/api/child-profile", requireAuth, async (req, res) => {
     const user = (req as any).user;
-    const profile = await prisma.childProfile.findFirst({ where: { parentId: user.id } });
+    const profile = await getPrisma().childProfile.findFirst({ where: { parentId: user.id } });
     if (!profile) return res.status(404).json({ error: "No profile found" });
     try {
       const decryptedName = decryptData(JSON.parse(profile.name));
@@ -189,15 +194,15 @@ export function createApp() {
     const user = (req as any).user;
     const { name, gender, birthdate } = req.body.profile;
     const encryptedName = JSON.stringify(encryptData(name));
-    const existing = await prisma.childProfile.findFirst({ where: { parentId: user.id } });
+    const existing = await getPrisma().childProfile.findFirst({ where: { parentId: user.id } });
     let profile;
     if (existing) {
-      profile = await prisma.childProfile.update({
+      profile = await getPrisma().childProfile.update({
         where: { id: existing.id },
         data: { name: encryptedName, gender, birthdate: new Date(birthdate) }
       });
     } else {
-      profile = await prisma.childProfile.create({
+      profile = await getPrisma().childProfile.create({
         data: { name: encryptedName, gender, birthdate: new Date(birthdate), parentId: user.id }
       });
     }
