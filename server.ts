@@ -141,9 +141,7 @@ export function createApp() {
       hasDbUrl: !!process.env.DATABASE_URL,
       dbUrlLength: process.env.DATABASE_URL?.length || 0,
       hasDirectUrl: !!process.env.DIRECT_URL,
-      hasSalt: !!process.env.SALT,
-      moduleConnectionStringLength: connectionString?.length || 0,
-      moduleConnectionStringType: typeof connectionString
+      hasSalt: !!process.env.SALT
     });
   });
 
