@@ -23,7 +23,7 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export { detectEmergencyTriage, detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter";
+export { detectEmergencyTriage, detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clinicalRouter.js";
 
 export const MAX_CHAT_MESSAGES = 20;
 export const MAX_MESSAGE_CHARS = 5000;
