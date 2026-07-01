@@ -11,3 +11,5 @@ dev.db
 *.db
 
 /src/generated/prisma
+
+.vercel

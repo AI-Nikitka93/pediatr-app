@@ -14,7 +14,7 @@ import { detectPediatricCareRoute, PEDIATRIC_CARE_ROUTE_RULES } from "./src/clin
 neonConfig.webSocketConstructor = ws;
 const connectionString = process.env.DATABASE_URL!;
 const pool = new Pool({ connectionString });
-const adapter = new PrismaNeon(pool);
+const adapter = new PrismaNeon(pool as any);
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter });
@@ -49,7 +49,7 @@ function hashPassword(password: string) {
   return createHash("sha256").update(password + process.env.SALT).digest("hex");
 }
 
-const ENCRYPTION_KEY = Buffer.from(process.env.SALT || "default-salt-1234567890123456789").subarray(0, 32).toString('padEnd', 32).substring(0, 32);
+const ENCRYPTION_KEY = Buffer.from(process.env.SALT || "default-salt-1234567890123456789").toString("utf8").padEnd(32, "0").substring(0, 32);
 
 function encryptData(text: string) {
   const iv = randomBytes(12);
@@ -217,6 +217,7 @@ export async function startServer() {
   });
 }
 
+import { pathToFileURL } from "url";
 const isCliEntry = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
 if (isCliEntry) {
   startServer();

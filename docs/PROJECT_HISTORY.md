@@ -79,3 +79,14 @@
 - Verification: База данных Neon успешно приняла миграции. Сборка `npm run build` проходит без ошибок. 
 - Status: DONE. Проект полностью готов к загрузке на хостинг.
 
+### 2026-07-01 22:11:00 UTC+3 — Архитектурный рефакторинг под Vercel Serverless
+- Changed: Бэкенд адаптирован для работы на Vercel (Edge/Serverless) с решением проблем холодного старта БД и безопасности.
+- Execution:
+  1. `server.ts`: Авторизация переведена на stateless JWT (`jsonwebtoken`). Удалена таблица `Session`.
+  2. `server.ts`: Внедрен паттерн Singleton для PrismaClient.
+  3. `server.ts`: Данные `ChildProfile` теперь шифруются алгоритмом AES-256-GCM.
+  4. Prisma: Внедрен HTTP/WebSocket адаптер `@prisma/adapter-neon` и `@neondatabase/serverless` для предотвращения ошибки P2024. `schema.prisma` очищена, `directUrl` перенесен в `prisma.config.ts`.
+  5. Vercel: Созданы `api/index.ts` и `vercel.json` для Zero-Config деплоя.
+- Verification: `npm run build` прошел успешно. Prisma Client сгенерирован (v7.8.0), БД Neon синхронизирована (`db push --accept-data-loss`). Код отправлен в GitHub.
+- Status: DONE. Проект готов к деплою на Vercel.
+
