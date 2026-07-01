@@ -163,9 +163,9 @@ export function createApp() {
         auditId: "demo-audit-" + Date.now(),
         consent: true
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error("DEMO SESSION ERROR", e);
-      res.status(500).json({ error: "Demo session failed" });
+      res.status(500).json({ error: "Demo session failed", details: e?.message || String(e) });
     }
   });
 
