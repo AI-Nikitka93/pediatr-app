@@ -129,6 +129,30 @@ export function createApp() {
     } catch (e) { res.status(500).json({ error: "Login failed" }); }
   });
 
+  app.post("/api/auth/demo-session", async (req, res) => {
+    try {
+      const { user } = req.body;
+      let dbUser = await prisma.user.findUnique({ where: { email: user.email } });
+      if (!dbUser) {
+        dbUser = await prisma.user.create({
+          data: {
+            email: user.email,
+            passwordHash: hashPassword("12345"),
+            name: user.name || "Demo User",
+            type: user.type || "PARENT"
+          }
+        });
+      }
+      const token = generateToken(dbUser.id);
+      res.json({
+        sessionId: token,
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        auditId: "demo-audit-" + Date.now(),
+        consent: true
+      });
+    } catch (e) { res.status(500).json({ error: "Demo session failed" }); }
+  });
+
   app.get("/api/auth/me", requireAuth, (req, res) => {
     res.json({ user: (req as any).user });
   });
